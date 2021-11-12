@@ -1,0 +1,650 @@
+#include <stdio.h>
+#include <iostream>
+#include <conio.h>
+#include <stdbool.h>
+#include <windows.h>
+#include <time.h>
+#include <string>
+#define PLAY_X 102
+#define PLAY_Y 30
+
+using namespace std;
+
+class enemy;
+class ship;
+class bullet;
+class item_heal;
+
+void setcursor(bool visible)
+{
+	HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_CURSOR_INFO lpCursor;
+	lpCursor.bVisible = visible;
+	lpCursor.dwSize = 20;
+	SetConsoleCursorInfo(console, &lpCursor);
+}
+
+void setcolor(int fg, int bg)
+{
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	SetConsoleTextAttribute(hConsole, bg * 16 + fg);
+}
+
+void gotoxy(int x, int y)
+{
+	COORD c = {x, y};
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), c);
+}
+
+char cursor(int x, int y)
+{
+	HANDLE hStd = GetStdHandle(STD_OUTPUT_HANDLE);
+	char buf[2];
+	COORD c = {x, y};
+	DWORD num_read;
+	if (
+			!ReadConsoleOutputCharacter(hStd, (LPTSTR)buf, 1, c, (LPDWORD)&num_read))
+		return '\0';
+	else
+		return buf[0];
+}
+
+void _draw(int x, int y, const char *a, int n)
+{
+	gotoxy(x, y);
+	for (int i = 0; i < n; i++)
+		cout << a[i];
+}
+
+void __draw(int x, int y, char a)
+{
+	gotoxy(x, y);
+	cout << a;
+}
+
+class drawable
+{
+public:
+	int x, y;
+	int dim_x, dim_y;
+	string shape[20];
+
+	void draw()
+	{
+		for (int i = 0; i < dim_y; i++)
+		{
+			for (int j = 0; j < dim_x; j++)
+			{
+				__draw(x + j, y + i, shape[i][j]);
+			}
+		}
+	}
+
+	virtual void erase()
+	{
+		for (int i = 0; i < dim_y; i++)
+		{
+			for (int j = 0; j < dim_x; j++)
+			{
+				__draw(x + j, y + i, ' ');
+			}
+		}
+	}
+};
+
+class enemy : public drawable
+{
+public:
+	bool flag;
+
+	enemy()
+	{
+		x = 3 + rand() % 95;
+		y = rand() % 5;
+		flag = false;
+
+		dim_x = 4;
+		dim_y = 4;
+		
+		for (int i = 0; i < dim_y; i++)
+		{
+			shape[i] = _shape[i];
+		}
+		
+		
+	}
+	
+	void update()
+	{
+		if (flag)
+		{
+			erase();
+			y += 1;
+			if (y + 5 > PLAY_Y)
+			{
+				// flag = false;
+				x = 3 + rand() % 95;
+				y = rand() % 10;
+			}
+			else
+			{
+				draw();
+			}
+		}
+	}
+
+	void reset()
+	{
+		if (flag)
+		{
+			erase();
+			x = 3 + rand() % 95;
+			y = rand() % 10;
+			flag = true;
+			draw();
+		}
+	}
+
+	void remove()
+	{
+		flag = false;
+		erase();
+	}
+
+private:
+	string _shape[4] = {".**.", "****", "****", ".**."};
+};
+
+class ship : public drawable
+{
+public:
+	int direction;
+
+	ship()
+	{
+		x = PLAY_X / 2;
+		y = 26;
+		direction = 0;
+		dim_x = 5;
+		dim_y = 3;
+
+		for (int i = 0; i < dim_y; i++)
+		{
+			shape[i] = _shape[i];
+		}
+	}
+
+	void update()
+	{
+		erase();
+		if (direction == 1)
+		{
+			x = max(1, x - 1);
+		}
+		else if (direction == 2)
+		{
+			x = min(102, x + 1);
+		}
+		draw();
+	}
+
+	int hit(enemy enemies[], int n)
+	{
+		for (int i = 0; i < n; i++)
+		{
+			if (enemies[i].flag && enemies[i].x + 4 - x >= 0 && enemies[i].x + 4 - x < 8 && enemies[i].y + 5 >= 27)
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+private:
+	string _shape[3] = {"  ±  ", "|±±±|", "±±±±±"};
+};
+
+class bullet : public drawable
+{
+public:
+	bool flag;
+
+	bullet()
+	{
+		x = 0;
+		y = 0;
+		flag = false;
+		dim_x = 1;
+		dim_y = 1;
+		shape[0][0] = '|';
+	}
+
+	bullet(int _x, int _y)
+	{
+		x = _x;
+		y = _y;
+		flag = false;
+		dim_x = 1;
+		dim_y = 1;
+		shape[0][0] = '|';
+	}
+
+	// return index that got hit
+	int hit(enemy enemies[], int n)
+	{
+		for (int i = 0; i < n; i++)
+		{
+			if (flag && enemies[i].flag && x >= enemies[i].x && x <= enemies[i].x + 4 && y >= enemies[i].y && y <= enemies[i].y + 4)
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	void update()
+	{
+		if (flag)
+		{
+			erase();
+			y -= 1;
+			if (y == 0)
+			{
+				flag = false;
+			}
+			else
+			{
+				draw();
+			}
+		}
+	}
+
+	void remove()
+	{
+		flag = false;
+		erase();
+	}
+};
+
+class item_heal : public drawable
+{
+public:
+	bool flag;
+
+	item_heal()
+	{
+		x = rand() % 95;
+		y = rand() % 5;
+		flag = false;
+
+		dim_x = 1;
+		dim_y = 1;
+		
+		for (int i = 0; i < dim_y; i++)
+		{
+			shape[i] = _shape[i];
+		}	
+	}
+	
+	void update()
+	{
+		if (flag)
+		{
+			erase();
+			y += 1;
+			if (y +1  > PLAY_Y)
+			{
+				 flag = false;				
+			}			
+			else
+			{
+				draw();
+			}
+		}
+	}
+
+	void reset()
+	{
+		if (flag)
+		{
+			erase();
+			x = 3 + rand() % 95;
+			y = rand() % 10;
+			flag = true;
+			draw();
+		}
+	}
+
+	int hit(ship s)
+	{
+		
+			if (flag &&  x >= s.x && x <= s.x + 4 && y >= s.y && y <= s.y + 4)
+			{
+				return 1;
+			}
+		
+		return -1;
+	}
+	
+	void remove()
+	{
+		flag = false;
+		erase();
+	}
+
+private:
+	string _shape[1] = {"O"};
+};
+
+void border()
+{
+	int i, j;
+	for (i = 1; i <= 30; i++)
+	{
+		for (j = 1; j <= 102; j++)
+		{
+			if (i == 1 || i == 30 || j == 1 || j == 102)
+			{
+				cout << "±";
+			}
+			else
+			{
+				cout << " ";
+			}
+		}
+		printf("\n");
+	}
+}
+
+void drawBorder()
+{
+
+	for (int i = 0; i < 102; i++)
+	{
+		gotoxy(i, 30);
+		cout << "±";
+	}
+
+	for (int i = 0; i < 30; i++)
+	{
+		gotoxy(0, i);
+		cout << "±";
+		gotoxy(102, i);
+		cout << "±";
+	}
+	for (int i = 0; i < 31; i++)
+	{
+		gotoxy(102, i);
+		cout << "±";
+	}
+}
+
+int HP=3;
+int score = 0;
+int ship_cnt = 3;
+const int max_enemy = 15;
+const int max_bullet = 5;
+enemy enemies[max_enemy];
+bullet bullets[max_bullet];
+item_heal Item_heal ;
+
+void instructions()
+{
+
+	system("cls");
+	cout << "How to play";
+	cout << "\n\nA Key - Left";
+	cout << "\nD Key - Right";
+	cout << "\nS Key - Stop";
+	cout << "\nSpacebar = Shoot";
+	cout << "\n\nPress any key to go back to menu";
+	getch();
+}
+
+void show_score()
+{
+	gotoxy(107, 5);
+	cout << "Score: " << score;
+	gotoxy(106, 4);
+	cout << "----------";
+	gotoxy(106, 6);
+	cout << "----------";
+	gotoxy(107, 7);
+	cout << "HP: " << HP;
+}
+
+void play()
+{
+	system("cls");
+	ship ship;
+	score = 0;
+	drawBorder();
+	show_score();
+	
+	for (int i = 0; i < max_enemy; i++)
+	{
+		enemies[i] = enemy();
+		bool collided = true;
+		while(collided)
+		{
+		    collided = false;
+		    for(int z = 0 ; z < max_enemy ; z++)
+		    {
+		        if(enemies[z].flag && i != z) {
+		            if(abs(enemies[i].x - enemies[z].x) < 10) {
+		                enemies[i].x = 3 + rand() % 95;
+		                collided = true;
+		            }
+		        } 
+		    }
+		}
+	}
+		/*
+		for ( int z = 0; z< max_enemy; z++)
+		{	
+			if(enemies[z].flag && i!=z )
+		
+				if(abs(enemies[i].x-enemies[z].x) < 7)
+				{
+					enemies[i].x = 3 + rand() % 95;
+				}
+				
+				if(abs(enemies[i].y-enemies[z].y) < 7)
+				{
+					enemies[i].x = 3 + rand() % 95;
+				}
+		}
+	}*/
+
+	for (int i = 0; i < max_bullet; i++)
+	{
+		bullets[i].x = 0;
+		bullets[i].y = 0;
+		bullets[i].flag = false;
+	}
+
+	for (int i = 0; i < ship_cnt; i++)
+	{
+		enemies[i].flag = true;
+	}
+
+	char ch;
+	while (1)
+	{
+		if (_kbhit())
+		{
+			ch = _getch();
+			switch (ch)
+			{
+			case 'a':
+				ship.direction = 1;
+				break;
+			case 'd':
+				ship.direction = 2;
+				break;
+			case 's':
+				ship.direction = 0;
+				break;
+			case 'q':
+				return;
+			case ' ':
+				
+				for (int i = 0; i < max_bullet; i++)
+				{
+					if (!bullets[i].flag)
+					{
+						bullets[i].flag = true;
+						bullets[i].x = ship.x + 2;
+						bullets[i].y = ship.y - 1;
+						break;
+					}
+				}
+			
+				//special bullet
+				
+				/*
+				for (int i = 0; i < max_bullet; i++)
+				{
+					if (!bullets[i].flag)
+					{
+						bullets[i].flag = true;
+						bullets[i].x = ship.x + 4;
+						bullets[i].y = 26;
+						
+						break;
+					}
+					
+				}
+				for (int i = 0; i < max_bullet; i++)
+				{
+					if (!bullets[i].flag)
+					{
+						bullets[i].flag = true;
+						bullets[i].x = ship.x;
+						bullets[i].y = 26;
+						break;
+					}
+				
+				}
+				*/
+				break;
+			}
+		}
+
+		ship.update();
+
+		for (int i = 0; i < max_enemy; i++)
+		{
+			enemies[i].update();
+		}
+
+		for (int i = 0; i < max_bullet; i++)
+		{
+			bullets[i].update();
+		}
+		
+		Item_heal.update();
+		if(Item_heal.hit(ship)!=-1){
+			Item_heal.reset();
+			HP+=1;
+			gotoxy(107, 7);
+			cout << "HP: " << HP;
+		}
+		
+		int x = ship.hit(enemies, max_enemy);
+		if (x != -1)
+		{
+			
+				if (enemies[x].flag)
+				{
+				
+					enemies[x].reset();			
+					HP -= 1;
+					gotoxy(107, 7);
+					cout << "HP: " << HP;
+					
+				
+					if(HP == 0)
+					{
+						system("cls");
+						cout << endl;
+						gotoxy(40, 10);
+						cout << "--------------------------" << endl;
+						gotoxy(40, 11);
+						cout << "-------- Game Over -------" << endl;
+						gotoxy(40, 12);
+						cout << "--------------------------" << endl
+								 << endl;
+						gotoxy(37, 13);
+						cout << "Press any key to go back to menu.";
+						getch();
+						return;
+					}											
+				}
+			
+		}
+		
+		if( !Item_heal.flag && rand()%100 > 50)
+		{
+		Item_heal=item_heal();		
+		Item_heal.flag=true;
+		}
+		
+		for (int i = 0; i < max_bullet; i++)
+		{
+			if (bullets[i].flag)
+			{
+				int target = bullets[i].hit(enemies, max_enemy);
+				if (target != -1)
+				{
+					score += 1;
+					if (score % 5 == 0)
+					{
+						enemies[2 + score / 5].flag = true;
+					}
+				
+					enemies[target].reset();
+					show_score();
+					bullets[i].remove();
+				}
+			}
+		}
+		Sleep(100);
+	}
+}
+
+int main()
+{
+	setcursor(0);
+	srand((unsigned)time(NULL));
+
+	do
+	{
+		system("cls");
+		gotoxy(10, 5);
+		cout << " ---------------------------- ";
+		gotoxy(10, 6);
+		cout << " |     Space Adventure      | ";
+		gotoxy(10, 7);
+		cout << " ----------------------------";
+		gotoxy(10, 9);
+		cout << "1. Start Game";
+		gotoxy(10, 10);
+		cout << "2. Control";
+		gotoxy(10, 11);
+		cout << "3. Quit";
+		gotoxy(10, 13);
+		cout << "Select option: ";
+		char op = getche();
+
+		if (op == '1')
+			play();
+		else if (op == '2')
+			instructions();
+		else if (op == '3')
+			exit(0);
+
+	} while (1);
+
+	return 0;
+}
